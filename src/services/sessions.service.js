@@ -3,7 +3,12 @@ import {
   saveUser
 } from "../repositories/users.repository.js";
 
-import { createHash } from "../utils/hash.js";
+import {
+  createHash,
+  isValidPassword
+} from "../utils/hash.js";
+
+import { generateToken } from "../utils/jwt.js";
 
 export const registerUser = async ({
   first_name,
@@ -28,7 +33,9 @@ export const registerUser = async ({
   }
 
   if (password.length < 8) {
-    const error = new Error("La contraseña debe tener al menos 8 caracteres");
+    const error = new Error(
+      "La contraseña debe tener al menos 8 caracteres"
+    );
     error.statusCode = 400;
     throw error;
   }
@@ -58,4 +65,37 @@ export const registerUser = async ({
     email: user.email,
     role: user.role
   };
+};
+
+export const loginUser = async ({ email, password }) => {
+  if (!email || !password) {
+    const error = new Error("Credenciales inválidas");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const user = await getUserByEmail(normalizedEmail);
+
+  if (!user) {
+    const error = new Error("Credenciales inválidas");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const passwordIsValid = await isValidPassword(
+    password,
+    user.password
+  );
+
+  if (!passwordIsValid) {
+    const error = new Error("Credenciales inválidas");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const token = generateToken(user);
+
+  return token;
 };
