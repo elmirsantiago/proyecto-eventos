@@ -6,6 +6,8 @@ API REST desarrollada con Node.js y Express para una plataforma de gestión de e
 
 El proyecto permitirá administrar eventos, usuarios y sesiones de autenticación.
 
+La autenticación se encuentra centralizada mediante Passport.js, utilizando estrategias para registro, login y validación del usuario autenticado.
+
 ## Tecnologías
 
 - Node.js
@@ -14,6 +16,9 @@ El proyecto permitirá administrar eventos, usuarios y sesiones de autenticació
 - Mongoose
 - bcrypt
 - JSON Web Token (JWT)
+- Passport.js
+- Passport Local
+- Passport JWT
 - Cookie Parser
 - Dotenv
 - ES Modules
@@ -38,7 +43,7 @@ JWT_SECRET=your_secret_here
 JWT_EXPIRES_IN=1h
 ```
 
-El archivo `.env` no debe subirse al repositorio.
+El archivo `.env` contiene información sensible y no debe subirse al repositorio.
 
 ## Ejecución
 
@@ -61,7 +66,8 @@ src/
 ├── app.js
 ├── server.js
 ├── config/
-│   └── db.js
+│   ├── db.js
+│   └── passport.config.js
 ├── controllers/
 │   ├── events.controller.js
 │   └── sessions.controller.js
@@ -84,15 +90,76 @@ src/
     └── jwt.js
 ```
 
+## Passport.js
+
+La autenticación está centralizada en:
+
+```text
+src/config/passport.config.js
+```
+
+Passport se inicializa en `app.js`, mientras que las estrategias se configuran de forma independiente en `passport.config.js`.
+
+Actualmente se implementan tres estrategias:
+
+### Estrategia register
+
+La estrategia `register` se encarga de:
+
+- Validar los campos obligatorios.
+- Validar el formato del email.
+- Normalizar el email mediante `trim` y `lowercase`.
+- Validar la longitud mínima de la contraseña.
+- Verificar que el email no esté registrado.
+- Hashear la contraseña mediante bcrypt.
+- Establecer el rol `user` por defecto.
+- Crear el usuario en MongoDB.
+
+La ruta delega la autenticación mediante:
+
+```text
+passport.authenticate("register", ...)
+```
+
+### Estrategia login
+
+La estrategia `login`:
+
+- Normaliza el email.
+- Busca el usuario registrado.
+- Compara la contraseña mediante bcrypt.
+- Utiliza un mensaje genérico ante credenciales incorrectas.
+
+Una vez autenticado el usuario, el controller genera el JWT y almacena el token en la cookie `currentUser`.
+
+La generación del JWT no se realiza dentro de Passport.
+
+### Estrategia current
+
+La estrategia `current`:
+
+- Obtiene el JWT desde la cookie `currentUser`.
+- Verifica la firma y validez del token.
+- Deja los datos autenticados disponibles en `req.user`.
+- Rechaza el acceso con `401 Unauthorized` cuando no existe un token válido.
+
+## Preparación para providers externos
+
+La configuración de Passport se encuentra centralizada y separada de `app.js`.
+
+Esto permite incorporar en el futuro nuevas estrategias y providers externos, como Google o GitHub, sin modificar la configuración principal de Express.
+
+Por ejemplo, se podrían agregar nuevas estrategias dentro de `passport.config.js` manteniendo la misma organización del proyecto.
+
 ## Rutas disponibles
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/api/health` | Comprueba que el servidor está activo |
 | GET | `/api/events` | Devuelve la lista de eventos |
-| POST | `/api/sessions/register` | Registra un nuevo usuario |
-| POST | `/api/sessions/login` | Inicia sesión y genera la cookie de autenticación |
-| GET | `/api/sessions/current` | Devuelve los datos del usuario autenticado |
+| POST | `/api/sessions/register` | Registra un nuevo usuario mediante Passport |
+| POST | `/api/sessions/login` | Autentica al usuario y genera la cookie |
+| GET | `/api/sessions/current` | Valida el JWT mediante Passport |
 | POST | `/api/sessions/logout` | Cierra la sesión y elimina la cookie |
 
 ## Health
@@ -129,7 +196,7 @@ Respuesta:
 
 `POST /api/sessions/register`
 
-Permite registrar un nuevo usuario de forma segura.
+Permite registrar un nuevo usuario mediante la estrategia `register` de Passport.
 
 ### Campos obligatorios
 
@@ -138,13 +205,13 @@ Permite registrar un nuevo usuario de forma segura.
 - `email`
 - `password`
 
-Ejemplo de request:
+Ejemplo:
 
 ```json
 {
   "first_name": "Ana",
   "last_name": "Pérez",
-  "email": "Ana@Mail.com ",
+  "email": "Ana@Mail.com",
   "password": "Secreta123"
 }
 ```
@@ -154,6 +221,7 @@ Respuesta exitosa — `201 Created`:
 ```json
 {
   "status": "success",
+  "message": "Usuario registrado correctamente",
   "payload": {
     "id": "ID_GENERADO_POR_MONGODB",
     "first_name": "Ana",
@@ -164,7 +232,7 @@ Respuesta exitosa — `201 Created`:
 }
 ```
 
-La contraseña se almacena hasheada mediante bcrypt y nunca se devuelve en la respuesta de la API.
+La contraseña se almacena hasheada mediante bcrypt y nunca se devuelve en las respuestas.
 
 ### Validaciones del registro
 
@@ -188,8 +256,6 @@ Email inválido — `400 Bad Request`:
 
 Contraseña demasiado corta — `400 Bad Request`:
 
-La contraseña debe tener al menos 8 caracteres.
-
 ```json
 {
   "status": "error",
@@ -210,9 +276,9 @@ Email duplicado — `409 Conflict`:
 
 `POST /api/sessions/login`
 
-Permite iniciar sesión utilizando email y contraseña.
+Utiliza la estrategia `login` de Passport para validar las credenciales.
 
-Ejemplo de request:
+Ejemplo:
 
 ```json
 {
@@ -230,14 +296,14 @@ Respuesta exitosa — `200 OK`:
 }
 ```
 
-Al iniciar sesión correctamente se genera un JWT y se almacena en una cookie llamada `currentUser`.
+Después de una autenticación exitosa, el controller genera el JWT y lo almacena en la cookie `currentUser`.
 
 La cookie utiliza:
 
 - `httpOnly: true`
 - `sameSite: "lax"`
 - `maxAge: 3600000`
-- `secure: true` solamente en producción
+- `secure: true` únicamente en producción
 
 Credenciales incorrectas — `401 Unauthorized`:
 
@@ -254,9 +320,9 @@ El mismo mensaje se utiliza tanto para un email inexistente como para una contra
 
 `GET /api/sessions/current`
 
-Ruta protegida que requiere una sesión válida.
+Utiliza la estrategia `current` de Passport.
 
-El middleware de autenticación obtiene el JWT desde la cookie `currentUser`, verifica el token y guarda sus datos en `req.user`.
+La estrategia obtiene el JWT desde la cookie `currentUser`, verifica su validez y deja los datos disponibles en `req.user`.
 
 Respuesta exitosa — `200 OK`:
 
@@ -271,7 +337,9 @@ Respuesta exitosa — `200 OK`:
 }
 ```
 
-Sin cookie o con un token inválido/expirado — `401 Unauthorized`:
+La respuesta nunca incluye la contraseña.
+
+Sin cookie, con un token inválido, manipulado o expirado — `401 Unauthorized`:
 
 ```json
 {
@@ -284,7 +352,9 @@ Sin cookie o con un token inválido/expirado — `401 Unauthorized`:
 
 `POST /api/sessions/logout`
 
-Cierra la sesión eliminando la cookie `currentUser`.
+El logout no utiliza una estrategia de Passport.
+
+El controller elimina directamente la cookie `currentUser`.
 
 Respuesta exitosa — `200 OK`:
 
@@ -299,18 +369,19 @@ Después del logout, intentar acceder nuevamente a `/api/sessions/current` devue
 
 ## Seguridad
 
-- Las contraseñas se hashean utilizando bcrypt antes de almacenarse.
-- Los emails se normalizan utilizando `trim` y `lowercase`.
+- Las contraseñas se hashean utilizando bcrypt.
+- Los emails se normalizan mediante `trim` y `lowercase`.
 - El rol del registro público siempre se establece como `user`.
-- El rol no puede modificarse desde el body del registro público.
-- La contraseña nunca se devuelve en las respuestas de la API.
-- La autenticación utiliza JSON Web Tokens (JWT).
+- El rol no puede establecerse desde el body del registro.
+- Las contraseñas nunca se devuelven en las respuestas.
+- La autenticación se encuentra centralizada mediante Passport.js.
+- Las estrategias `register`, `login` y `current` se encuentran en `passport.config.js`.
 - El JWT contiene únicamente `id`, `email` y `role`.
-- El JWT se firma utilizando `JWT_SECRET` desde las variables de entorno.
-- La expiración del JWT se configura mediante `JWT_EXPIRES_IN`.
+- El JWT es generado por el controller después de un login exitoso.
+- El JWT se firma utilizando `JWT_SECRET`.
+- La expiración se configura mediante `JWT_EXPIRES_IN`.
 - El token se almacena en la cookie `currentUser` con `httpOnly: true`.
-- La cookie utiliza `sameSite: "lax"` y `secure: true` únicamente en producción.
-- La ruta `/api/sessions/current` está protegida mediante un middleware de autenticación.
+- `/api/sessions/current` valida el JWT mediante la estrategia `current`.
+- Los tokens inválidos, manipulados o expirados son rechazados.
 - El logout elimina la cookie `currentUser`.
-- Las variables sensibles se almacenan en `.env`.
 - `.env` y `node_modules` están excluidos del repositorio mediante `.gitignore`.
