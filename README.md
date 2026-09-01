@@ -76,15 +76,13 @@ src/
 ├── middlewares/
 │   └── auth.middleware.js
 ├── models/
-│   ├── Event.js
-│   └── User.js
+│   ├── event.js
+│   └── user.js
 ├── repositories/
 │   └── users.repository.js
 ├── routes/
 │   ├── events.router.js
 │   └── sessions.router.js
-├── services/
-│   └── sessions.service.js
 └── utils/
     ├── hash.js
     └── jwt.js
