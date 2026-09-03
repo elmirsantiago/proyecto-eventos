@@ -1,128 +1,97 @@
-import Event from "../models/event.js";
+import {
+  createEventService,
+  getEventsService,
+  getEventByIdService,
+  updateEventService,
+  changeEventStatusService
+} from "../services/events.service.js";
 
+const handleError = (error, res) => {
+  return res.status(error.statusCode || 500).json({
+    status: "error",
+    message: error.statusCode
+      ? error.message
+      : "Error interno del servidor"
+  });
+};
 
-// ==============================
-// GET EVENTS
-// ==============================
-
+// GET /api/events
 export const getEvents = async (req, res) => {
   try {
-    const events = await Event.find({ status: "published" });
+    const result = await getEventsService(req.query);
 
     return res.status(200).json({
       status: "success",
-      payload: events
+      ...result
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
-    });
+    return handleError(error, res);
   }
 };
 
+// GET /api/events/:id
+export const getEventById = async (req, res) => {
+  try {
+    const event = await getEventByIdService(req.params.id);
 
-// ==============================
-// CREATE EVENT
-// ==============================
+    return res.status(200).json({
+      status: "success",
+      data: event
+    });
+  } catch (error) {
+    return handleError(error, res);
+  }
+};
 
+// POST /api/events
 export const createEvent = async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      date,
-      location
-    } = req.body;
-
-    if (!title || !description || !date || !location) {
-      return res.status(400).json({
-        status: "error",
-        message: "Faltan campos obligatorios"
-      });
-    }
-
-    const event = await Event.create({
-      title,
-      description,
-      date,
-      location,
-      organizer: req.user.id
-    });
+    const event = await createEventService(
+      req.body,
+      req.user
+    );
 
     return res.status(201).json({
       status: "success",
-      payload: {
-        id: event._id,
-        title: event.title,
-        description: event.description,
-        date: event.date,
-        location: event.location,
-        organizer: event.organizer,
-        status: event.status
-      }
+      data: event
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
-    });
+    return handleError(error, res);
   }
 };
 
-
-// ==============================
-// UPDATE EVENT
-// ==============================
-
+// PUT /api/events/:id
 export const updateEvent = async (req, res) => {
   try {
-    const { eid } = req.params;
-
-    const event = await Event.findById(eid);
-
-    if (!event) {
-      return res.status(404).json({
-        status: "error",
-        message: "Evento no encontrado"
-      });
-    }
-
-    const isAdmin = req.user.role === "admin";
-    const isOwner =
-      event.organizer.toString() === req.user.id;
-
-    if (!isAdmin && !isOwner) {
-      return res.status(403).json({
-        status: "error",
-        message: "No tenés permisos para modificar este evento"
-      });
-    }
-
-    const allowedFields = [
-      "title",
-      "description",
-      "date",
-      "location",
-      "status"
-    ];
-
-    for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        event[field] = req.body[field];
-      }
-    }
-
-    await event.save();
+    const event = await updateEventService(
+      req.params.id,
+      req.body,
+      req.user
+    );
 
     return res.status(200).json({
       status: "success",
-      payload: event
+      data: event
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
+    return handleError(error, res);
+  }
+};
+
+// PATCH /api/events/:id/status
+export const changeEventStatus = async (req, res) => {
+  try {
+    const event = await changeEventStatusService(
+      req.params.id,
+      req.body.status,
+      req.user
+    );
+
+    return res.status(200).json({
+      status: "success",
+      data: event
     });
+  } catch (error) {
+    return handleError(error, res);
   }
 };
