@@ -1270,3 +1270,539 @@ La API cuenta actualmente con:
 - Paginación.
 - Ordenamiento.
 - Arquitectura organizada por capas.
+# Pre-entrega 7 - Tickets, inscripciones y control de cupos
+
+## Modelo Ticket
+
+La plataforma incorpora un sistema de tickets para gestionar las inscripciones de los usuarios a eventos.
+
+El modelo `Ticket` contiene:
+
+- `user`
+- `event`
+- `status`
+- `quantity`
+- `reservationCode`
+- `createdAt`
+- `updatedAt`
+- `cancelledAt`
+
+Los campos `user` y `event` se almacenan como referencias `ObjectId` a los modelos correspondientes.
+
+```javascript
+user: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  required: true
+}
+
+event: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Event",
+  required: true
+}
+```
+
+No se almacenan objetos completos de usuarios o eventos dentro del ticket.
+
+## Estados de Ticket
+
+Los estados permitidos son:
+
+```text
+confirmed
+pending
+cancelled
+```
+
+El estado por defecto de una nueva inscripción es:
+
+```text
+confirmed
+```
+
+Un ticket cancelado permanece almacenado en MongoDB y deja de ocupar cupo.
+
+---
+
+## Arquitectura de Tickets
+
+La gestión de tickets mantiene la arquitectura por capas utilizada en el resto del proyecto:
+
+```text
+Route
+  ↓
+Controller
+  ↓
+Service
+  ↓
+Repository
+  ↓
+DAO
+  ↓
+Model / MongoDB
+```
+
+Archivos principales:
+
+```text
+src/
+├── controllers/
+│   └── tickets.controller.js
+├── dao/
+│   └── tickets.dao.js
+├── models/
+│   └── ticket.js
+├── repositories/
+│   └── tickets.repository.js
+├── routes/
+│   └── tickets.router.js
+├── services/
+│   └── tickets.service.js
+└── utils/
+    └── mailer.js
+```
+
+Las validaciones de cupos, duplicados, estados y propiedad se encuentran en `tickets.service.js`.
+
+Los controllers solamente manejan `request` y `response`.
+
+El acceso a MongoDB se realiza mediante Repository y DAO.
+
+---
+
+# Endpoints de Tickets
+
+## Crear inscripción
+
+```text
+POST /api/events/:eid/tickets
+```
+
+Acceso:
+
+```text
+Usuario autenticado
+```
+
+Ejemplo de body:
+
+```json
+{
+  "quantity": 1
+}
+```
+
+Respuesta exitosa:
+
+```text
+201 Created
+```
+
+Ejemplo:
+
+```json
+{
+  "status": "success",
+  "message": "Inscripción realizada correctamente",
+  "data": {
+    "user": "ID_DEL_USUARIO",
+    "event": "ID_DEL_EVENTO",
+    "status": "confirmed",
+    "quantity": 1,
+    "reservationCode": "CODIGO_DE_RESERVA",
+    "cancelledAt": null
+  }
+}
+```
+
+El código de reserva se genera automáticamente mediante `crypto.randomUUID()`.
+
+---
+
+## Validaciones de inscripción
+
+Antes de crear un ticket se comprueba:
+
+1. Que el evento exista.
+2. Que el evento esté en estado `published`.
+3. Que el evento no esté `cancelled`.
+4. Que el evento no esté `finished`.
+5. Que `quantity` sea un número entero mayor a `0`.
+6. Que exista cupo suficiente.
+7. Que el usuario no posea otra inscripción activa para el mismo evento.
+
+Todas estas validaciones se realizan en la capa de services.
+
+---
+
+## Control de cupos
+
+La cantidad de lugares ocupados se calcula sumando `quantity` únicamente de tickets con estados activos:
+
+```text
+confirmed
+pending
+```
+
+Los tickets con estado:
+
+```text
+cancelled
+```
+
+no se incluyen en el cálculo.
+
+El cupo disponible se calcula como:
+
+```text
+cupo disponible = capacidad del evento - cupos ocupados
+```
+
+Si la cantidad solicitada supera el cupo disponible, la inscripción es rechazada.
+
+Ejemplo:
+
+```json
+{
+  "status": "error",
+  "message": "Cupo insuficiente. Lugares disponibles: 2"
+}
+```
+
+Al cancelar un ticket, su cantidad deja automáticamente de formar parte del cálculo de cupos.
+
+---
+
+## Prevención de inscripciones duplicadas
+
+Un usuario no puede tener más de un ticket activo para el mismo evento.
+
+Se consideran activos los tickets:
+
+```text
+confirmed
+pending
+```
+
+Si ya existe una inscripción activa:
+
+```text
+409 Conflict
+```
+
+Ejemplo:
+
+```json
+{
+  "status": "error",
+  "message": "Ya tenés una inscripción activa para este evento"
+}
+```
+
+Un ticket cancelado no impide realizar una nueva inscripción.
+
+---
+
+## Consultar mis tickets
+
+```text
+GET /api/tickets/my-tickets
+```
+
+Acceso:
+
+```text
+Usuario autenticado
+```
+
+El endpoint devuelve únicamente los tickets pertenecientes al usuario autenticado.
+
+Los datos principales del evento se obtienen mediante `populate`:
+
+```text
+title
+date
+location
+```
+
+Ejemplo conceptual:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "event": {
+        "title": "Workshop Backend",
+        "date": "2026-12-15T18:00:00.000Z",
+        "location": "Rosario"
+      },
+      "status": "confirmed",
+      "quantity": 1,
+      "reservationCode": "CODIGO_DE_RESERVA"
+    }
+  ]
+}
+```
+
+No se exponen datos sensibles pertenecientes a otros usuarios.
+
+---
+
+## Consultar tickets de un evento
+
+```text
+GET /api/events/:eid/tickets
+```
+
+Acceso:
+
+```text
+Organizer propietario del evento
+Admin
+```
+
+Un organizer solamente puede consultar las inscripciones correspondientes a sus propios eventos.
+
+Si intenta consultar tickets de un evento perteneciente a otro organizer:
+
+```text
+403 Forbidden
+```
+
+Un usuario con rol `admin` puede consultar los tickets de cualquier evento.
+
+---
+
+## Cancelar ticket
+
+```text
+PATCH /api/tickets/:tid/cancel
+```
+
+Acceso:
+
+```text
+Dueño del ticket
+Admin
+```
+
+La cancelación es lógica.
+
+El documento no se elimina de MongoDB.
+
+Al cancelar:
+
+```text
+status = cancelled
+cancelledAt = fecha actual
+```
+
+Ejemplo:
+
+```json
+{
+  "status": "success",
+  "message": "Ticket cancelado correctamente",
+  "data": {
+    "status": "cancelled",
+    "cancelledAt": "FECHA_DE_CANCELACION"
+  }
+}
+```
+
+No se permite cancelar nuevamente un ticket que ya se encuentra cancelado.
+
+Un usuario común no puede cancelar tickets pertenecientes a otros usuarios.
+
+---
+
+# Notificaciones por email
+
+La plataforma utiliza `Nodemailer` para enviar una confirmación cuando una inscripción se realiza correctamente.
+
+El correo contiene:
+
+- Confirmación de inscripción.
+- Nombre del evento.
+- Fecha.
+- Lugar.
+- Cantidad de lugares reservados.
+- Código de reserva.
+
+El envío se realiza desde:
+
+```text
+src/utils/mailer.js
+```
+
+Las credenciales SMTP no se encuentran hardcodeadas en el código.
+
+Se obtienen exclusivamente mediante variables de entorno.
+
+## Variables de email
+
+`.env.example` debe contener:
+
+```env
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USER=
+MAIL_PASS=
+MAIL_FROM=
+```
+
+Para Gmail, `MAIL_PASS` corresponde a una contraseña de aplicación y no a la contraseña normal de la cuenta.
+
+Las credenciales reales solamente deben almacenarse en `.env`.
+
+El archivo `.env` nunca debe subirse al repositorio.
+
+---
+
+# Rutas incorporadas en Pre-entrega 7
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| POST | `/api/events/:eid/tickets` | Autenticado | Inscripción a un evento |
+| GET | `/api/tickets/my-tickets` | Autenticado | Consulta los tickets propios |
+| GET | `/api/events/:eid/tickets` | Organizer dueño / Admin | Consulta las inscripciones de un evento |
+| PATCH | `/api/tickets/:tid/cancel` | Dueño / Admin | Cancela lógicamente un ticket |
+
+---
+
+# Reglas de negocio de Tickets
+
+1. El evento debe existir.
+2. Solamente se permiten inscripciones a eventos `published`.
+3. No se permiten inscripciones a eventos `cancelled`.
+4. No se permiten inscripciones a eventos `finished`.
+5. `quantity` debe ser un entero mayor a `0`.
+6. La cantidad solicitada no puede superar el cupo disponible.
+7. Los tickets `cancelled` no ocupan cupo.
+8. Un usuario no puede poseer dos tickets activos para el mismo evento.
+9. La cancelación no elimina físicamente el ticket.
+10. Solamente el dueño del ticket o un admin puede cancelarlo.
+11. Un organizer solamente puede consultar tickets de sus propios eventos.
+12. Un admin puede consultar tickets de cualquier evento.
+13. Las validaciones de negocio se realizan en services.
+14. Las rutas y controllers no contienen lógica de cálculo de cupos.
+
+---
+
+# Casos de prueba - Pre-entrega 7
+
+Los casos definidos para validar el flujo completo son:
+
+1. Inscripción exitosa y recepción del email de confirmación.
+2. Inscripción sin sesión → `401 Unauthorized`.
+3. Inscripción a evento inexistente → `404 Not Found`.
+4. Inscripción a evento cancelado o finalizado → error de negocio.
+5. Inscripción sin cupo suficiente → error con mensaje indicando disponibilidad.
+6. Inscripción duplicada activa → `409 Conflict`.
+7. Cancelación propia y posterior reutilización del cupo.
+8. Cancelación de ticket ajeno como `user` → `403 Forbidden`.
+9. Consulta de tickets de evento como `user` → `403 Forbidden`.
+10. Consulta como `organizer` de tickets pertenecientes a evento ajeno → `403 Forbidden`.
+
+## Pruebas verificadas durante el desarrollo
+
+### Inscripción exitosa
+
+Se verificó una inscripción real obteniendo:
+
+```text
+201 Created
+```
+
+El ticket fue almacenado con:
+
+```text
+status: confirmed
+quantity: 1
+reservationCode: generado automáticamente
+cancelledAt: null
+```
+
+También se comprobó la recepción real del email de confirmación mediante Nodemailer.
+
+### Inscripción sin autenticación
+
+Se verificó:
+
+```text
+401 Unauthorized
+```
+
+Respuesta:
+
+```json
+{
+  "status": "error",
+  "message": "No autenticado"
+}
+```
+
+### Inscripción duplicada
+
+Durante las pruebas también se verificó el rechazo de una segunda inscripción activa para el mismo usuario y evento:
+
+```text
+409 Conflict
+```
+
+```json
+{
+  "status": "error",
+  "message": "Ya tenés una inscripción activa para este evento"
+}
+```
+
+Los casos restantes forman parte del conjunto de pruebas funcionales definido para la entrega.
+
+---
+
+# Seguridad de Tickets y Email
+
+- Los tickets almacenan referencias `ObjectId` y no objetos completos.
+- La identidad del usuario se obtiene desde el JWT autenticado.
+- El usuario no puede indicar otro `user` desde el body de la inscripción.
+- Los tickets cancelados no se eliminan físicamente.
+- Los tickets cancelados dejan de ocupar cupo.
+- Se controla la propiedad del ticket antes de una cancelación.
+- Se controla la propiedad del evento antes de mostrar sus inscripciones a un organizer.
+- Las credenciales SMTP se almacenan exclusivamente en variables de entorno.
+- `MAIL_PASS` nunca se encuentra hardcodeado.
+- `.env` permanece excluido del repositorio.
+- `.env.example` no contiene credenciales privadas.
+- Las validaciones de negocio se encuentran en services.
+- El acceso a MongoDB se encuentra separado mediante Repository y DAO.
+
+---
+
+# Estado actual del proyecto
+
+La API cuenta actualmente con:
+
+- Registro seguro de usuarios.
+- Login con Passport.js.
+- JWT mediante cookies.
+- Autorización basada en roles.
+- Control de propiedad de eventos.
+- CRUD de eventos.
+- Filtros.
+- Paginación.
+- Ordenamiento.
+- Modelo de tickets.
+- Inscripciones a eventos.
+- Control de cupos.
+- Prevención de inscripciones duplicadas.
+- Cancelación lógica de tickets.
+- Liberación automática de cupos.
+- Consulta de tickets propios.
+- Consulta de inscripciones por organizer/admin.
+- Generación de códigos de reserva.
+- Notificaciones de confirmación mediante Nodemailer.
+- Credenciales SMTP mediante variables de entorno.
+- Arquitectura organizada por capas.
