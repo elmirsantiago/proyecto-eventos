@@ -1,45 +1,39 @@
 import mongoose from "mongoose";
 import Ticket from "../models/ticket.js";
 
+// Crear ticket
 export const createTicketDAO = async (ticketData) => {
   return Ticket.create(ticketData);
 };
 
+// Buscar ticket por ID
 export const findTicketByIdDAO = async (id) => {
   return Ticket.findById(id);
 };
 
-export const findActiveTicketByUserAndEventDAO = async (
-  userId,
-  eventId
-) => {
-  return Ticket.findOne({
-    user: userId,
-    event: eventId,
-    status: {
-      $in: ["confirmed", "pending"]
-    }
-  });
+// Buscar un ticket según filtros
+export const findOneTicketDAO = async (filter) => {
+  return Ticket.findOne(filter);
 };
 
-export const getUserTicketsDAO = async (userId) => {
-  return Ticket.find({
-    user: userId
-  }).populate(
-    "event",
-    "title date location"
-  );
+// Buscar tickets según filtros
+export const findTicketsDAO = async ({
+  filter = {},
+  populate = null
+}) => {
+  let query = Ticket.find(filter);
+
+  if (populate) {
+    query = query.populate(
+      populate.path,
+      populate.select
+    );
+  }
+
+  return query;
 };
 
-export const getEventTicketsDAO = async (eventId) => {
-  return Ticket.find({
-    event: eventId
-  }).populate(
-    "user",
-    "first_name last_name email"
-  );
-};
-
+// Actualizar ticket
 export const updateTicketDAO = async (
   id,
   updateData
@@ -54,15 +48,17 @@ export const updateTicketDAO = async (
   );
 };
 
-export const getOccupiedCapacityDAO = async (
-  eventId
-) => {
+// Sumar cantidades mediante aggregation
+export const aggregateTicketQuantityDAO = async ({
+  eventId,
+  statuses
+}) => {
   const result = await Ticket.aggregate([
     {
       $match: {
         event: new mongoose.Types.ObjectId(eventId),
         status: {
-          $in: ["confirmed", "pending"]
+          $in: statuses
         }
       }
     },

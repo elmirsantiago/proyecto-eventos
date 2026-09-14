@@ -1,17 +1,27 @@
 import {
-  findUserByEmail,
-  createUser,
-  findAllUsers
+  findUserByIdDAO,
+  findUserByEmailDAO,
+  createUserDAO,
+  findAllUsersDAO,
+  updateUserDAO
 } from "../dao/users.dao.js";
 
+export const getUserById = async (id) => {
+  return findUserByIdDAO(id);
+};
+
 export const getUserByEmail = async (email) => {
-  return findUserByEmail(email);
+  return findUserByEmailDAO(email);
 };
 
 export const saveUser = async (userData) => {
-  return createUser(userData);
+  return createUserDAO(userData);
 };
 
 export const getAllUsers = async () => {
-  return findAllUsers();
+  return findAllUsersDAO();
+};
+
+export const updateUser = async (id, updateData) => {
+  return updateUserDAO(id, updateData);
 };

@@ -5,17 +5,8 @@ import {
   cancelTicketService
 } from "../services/tickets.service.js";
 
-const handleError = (error, res) => {
-  return res.status(error.statusCode || 500).json({
-    status: "error",
-    message: error.statusCode
-      ? error.message
-      : "Error interno del servidor"
-  });
-};
-
 // POST /api/events/:eid/tickets
-export const createTicket = async (req, res) => {
+export const createTicket = async (req, res, next) => {
   try {
     const ticket = await createTicketService(
       req.params.eid,
@@ -29,12 +20,12 @@ export const createTicket = async (req, res) => {
       data: ticket
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // GET /api/tickets/my-tickets
-export const getMyTickets = async (req, res) => {
+export const getMyTickets = async (req, res, next) => {
   try {
     const tickets = await getMyTicketsService(
       req.user.id
@@ -45,12 +36,16 @@ export const getMyTickets = async (req, res) => {
       data: tickets
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // GET /api/events/:eid/tickets
-export const getEventTickets = async (req, res) => {
+export const getEventTickets = async (
+  req,
+  res,
+  next
+) => {
   try {
     const tickets = await getEventTicketsService(
       req.params.eid,
@@ -62,12 +57,16 @@ export const getEventTickets = async (req, res) => {
       data: tickets
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // PATCH /api/tickets/:tid/cancel
-export const cancelTicket = async (req, res) => {
+export const cancelTicket = async (
+  req,
+  res,
+  next
+) => {
   try {
     const ticket = await cancelTicketService(
       req.params.tid,
@@ -80,6 +79,6 @@ export const cancelTicket = async (req, res) => {
       data: ticket
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };

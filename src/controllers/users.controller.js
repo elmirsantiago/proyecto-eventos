@@ -1,17 +1,21 @@
-import { getAllUsers } from "../repositories/users.repository.js";
+import {
+  getAllUsersService
+} from "../services/users.service.js";
 
-export const getUsers = async (req, res) => {
+export const getUsers = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const users = await getAllUsers();
+    const users =
+      await getAllUsersService();
 
     return res.status(200).json({
       status: "success",
       payload: users
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
-    });
+    next(error);
   }
 };

@@ -6,17 +6,8 @@ import {
   changeEventStatusService
 } from "../services/events.service.js";
 
-const handleError = (error, res) => {
-  return res.status(error.statusCode || 500).json({
-    status: "error",
-    message: error.statusCode
-      ? error.message
-      : "Error interno del servidor"
-  });
-};
-
 // GET /api/events
-export const getEvents = async (req, res) => {
+export const getEvents = async (req, res, next) => {
   try {
     const result = await getEventsService(req.query);
 
@@ -25,12 +16,12 @@ export const getEvents = async (req, res) => {
       ...result
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // GET /api/events/:id
-export const getEventById = async (req, res) => {
+export const getEventById = async (req, res, next) => {
   try {
     const event = await getEventByIdService(req.params.id);
 
@@ -39,12 +30,12 @@ export const getEventById = async (req, res) => {
       data: event
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // POST /api/events
-export const createEvent = async (req, res) => {
+export const createEvent = async (req, res, next) => {
   try {
     const event = await createEventService(
       req.body,
@@ -56,12 +47,12 @@ export const createEvent = async (req, res) => {
       data: event
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // PUT /api/events/:id
-export const updateEvent = async (req, res) => {
+export const updateEvent = async (req, res, next) => {
   try {
     const event = await updateEventService(
       req.params.id,
@@ -74,12 +65,16 @@ export const updateEvent = async (req, res) => {
       data: event
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };
 
 // PATCH /api/events/:id/status
-export const changeEventStatus = async (req, res) => {
+export const changeEventStatus = async (
+  req,
+  res,
+  next
+) => {
   try {
     const event = await changeEventStatusService(
       req.params.id,
@@ -92,6 +87,6 @@ export const changeEventStatus = async (req, res) => {
       data: event
     });
   } catch (error) {
-    return handleError(error, res);
+    next(error);
   }
 };

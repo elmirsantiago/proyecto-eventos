@@ -1,30 +1,33 @@
-import { generateToken } from "../utils/jwt.js";
+import {
+  generateToken
+} from "../utils/jwt.js";
+
+import {
+  UserDTO
+} from "../dto/user.dto.js";
 
 
 // ==============================
 // REGISTER
 // ==============================
 
-export const registerUser = async (req, res) => {
+export const registerUser = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const user = req.user;
+    const user =
+      new UserDTO(req.user);
 
     return res.status(201).json({
       status: "success",
-      message: "Usuario registrado correctamente",
-      payload: {
-        id: user._id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: user.email,
-        role: user.role
-      }
+      message:
+        "Usuario registrado correctamente",
+      payload: user
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
-    });
+    next(error);
   }
 };
 
@@ -33,28 +36,37 @@ export const registerUser = async (req, res) => {
 // LOGIN
 // ==============================
 
-export const loginUser = async (req, res) => {
+export const loginUser = async (
+  req,
+  res,
+  next
+) => {
   try {
     const user = req.user;
 
-    const token = generateToken(user);
+    const token =
+      generateToken(user);
 
-    res.cookie("currentUser", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === "production"
-    });
+    res.cookie(
+      "currentUser",
+      token,
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge:
+          60 * 60 * 1000,
+        secure:
+          process.env.NODE_ENV ===
+          "production"
+      }
+    );
 
     return res.status(200).json({
       status: "success",
       message: "Login correcto"
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
-    });
+    next(error);
   }
 };
 
@@ -63,23 +75,21 @@ export const loginUser = async (req, res) => {
 // CURRENT
 // ==============================
 
-export const currentUser = async (req, res) => {
+export const currentUser = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const user = req.user;
+    const user =
+      new UserDTO(req.user);
 
     return res.status(200).json({
       status: "success",
-      payload: {
-        id: user.id,
-        email: user.email,
-        role: user.role
-      }
+      payload: user
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error interno del servidor"
-    });
+    next(error);
   }
 };
 
@@ -88,15 +98,28 @@ export const currentUser = async (req, res) => {
 // LOGOUT
 // ==============================
 
-export const logoutUser = async (req, res) => {
-  res.clearCookie("currentUser", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production"
-  });
+export const logoutUser = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    res.clearCookie(
+      "currentUser",
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        secure:
+          process.env.NODE_ENV ===
+          "production"
+      }
+    );
 
-  return res.status(200).json({
-    status: "success",
-    message: "Sesión cerrada"
-  });
+    return res.status(200).json({
+      status: "success",
+      message: "Sesión cerrada"
+    });
+  } catch (error) {
+    next(error);
+  }
 };

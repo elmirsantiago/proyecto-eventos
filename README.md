@@ -1806,3 +1806,131 @@ La API cuenta actualmente con:
 - Notificaciones de confirmación mediante Nodemailer.
 - Credenciales SMTP mediante variables de entorno.
 - Arquitectura organizada por capas.
+---
+
+# Pre-Entrega 8 - Arquitectura DAO, Repository y DTO
+
+## Objetivo
+
+Se realizó un refactor de la API para separar formalmente las responsabilidades de acceso a datos, dominio, lógica de negocio y transferencia de información.
+
+La arquitectura utilizada es:
+
+Route → Controller → Service → Repository → DAO → Model / MongoDB
+
+Las respuestas de entidades sensibles pasan además por DTO antes de ser enviadas al cliente.
+
+## Capa DAO
+
+La capa DAO es la única responsable de acceder directamente a los modelos de Mongoose.
+
+Se implementaron DAOs para:
+
+- Users
+- Events
+- Tickets
+
+Los DAO realizan operaciones de persistencia como:
+
+- create
+- findById
+- findOne
+- find
+- update
+- count
+- aggregate
+
+Los controllers y services no importan modelos de Mongoose directamente.
+
+## Capa Repository
+
+Los repositories utilizan los DAO y exponen operaciones orientadas al dominio.
+
+Ejemplos:
+
+- búsqueda de usuarios por email
+- búsqueda de eventos
+- búsqueda de tickets activos
+- tickets pertenecientes a un usuario
+- tickets pertenecientes a un evento
+- cálculo de cupos ocupados
+- cancelación de tickets
+
+Los repositories no importan modelos de Mongoose.
+
+## Capa Service
+
+Los services consumen repositories y concentran las reglas de negocio.
+
+Entre las reglas implementadas se encuentran:
+
+- validación de fechas
+- validación de capacidad y precio
+- estados permitidos de eventos
+- permisos y ownership
+- control de cupos
+- prevención de inscripciones duplicadas
+- cancelación de tickets
+- envío de email de confirmación
+
+## DTO
+
+Se incorporó una capa DTO para controlar la información enviada al cliente.
+
+DTO implementados:
+
+- UserDTO
+- EventDTO
+- TicketDTO
+
+UserDTO evita exponer información sensible como la contraseña.
+
+TicketDTO controla también los documentos relacionados obtenidos mediante populate, evitando que se expongan datos sensibles del usuario.
+
+EventDTO controla la representación externa de los eventos.
+
+## Manejo centralizado de errores
+
+Se agregó:
+
+src/middlewares/error.middleware.js
+
+El middleware centralizado permite mantener un formato consistente de errores y diferenciar correctamente códigos HTTP como:
+
+- 400 Bad Request
+- 401 Unauthorized
+- 403 Forbidden
+- 404 Not Found
+- 409 Conflict
+- 500 Internal Server Error
+
+También se contemplan errores de validación y IDs inválidos.
+
+## Pruebas realizadas
+
+Se verificó el flujo completo:
+
+1. Registro de usuario
+2. Login
+3. Creación de evento
+4. Inscripción a evento
+5. Consulta de tickets del usuario
+6. Cancelación del ticket
+
+También se verificó:
+
+- GET /api/sessions/current no expone password
+- Los usuarios populados en tickets no exponen password
+- Una ruta protegida sin sesión responde 401
+- Un usuario autenticado sin permisos responde 403
+- Los errores de negocio responden con el código HTTP correspondiente y no con 500
+- La creación de eventos continúa funcionando después del refactor
+- El control de cupos y las inscripciones continúan funcionando correctamente
+
+## Resultado
+
+La API mantiene su comportamiento funcional y queda organizada mediante una arquitectura por capas:
+
+Route → Controller → Service → Repository → DAO → Database
+
+La incorporación de DTO permite controlar de forma explícita la información expuesta por la API y evitar la filtración de datos sensibles.

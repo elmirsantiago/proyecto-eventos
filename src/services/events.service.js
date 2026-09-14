@@ -6,6 +6,8 @@ import {
   countEventsRepository
 } from "../repositories/events.repository.js";
 
+import { EventDTO } from "../dto/event.dto.js";
+
 const createError = (message, statusCode) => {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -34,7 +36,10 @@ const validateFutureDate = (date) => {
   }
 };
 
-export const createEventService = async (eventData, user) => {
+export const createEventService = async (
+  eventData,
+  user
+) => {
   const {
     title,
     description,
@@ -55,11 +60,17 @@ export const createEventService = async (eventData, user) => {
     capacity === undefined ||
     price === undefined
   ) {
-    throw createError("Faltan campos obligatorios", 400);
+    throw createError(
+      "Faltan campos obligatorios",
+      400
+    );
   }
 
   validateFutureDate(date);
-  validateCapacityAndPrice({ capacity, price });
+  validateCapacityAndPrice({
+    capacity,
+    price
+  });
 
   if (
     status !== undefined &&
@@ -71,7 +82,7 @@ export const createEventService = async (eventData, user) => {
     );
   }
 
-  return createEventRepository({
+  const event = await createEventRepository({
     title,
     description,
     category,
@@ -82,16 +93,21 @@ export const createEventService = async (eventData, user) => {
     status: status || "draft",
     organizer: user.id
   });
+
+  return new EventDTO(event);
 };
 
 export const getEventByIdService = async (id) => {
   const event = await getEventByIdRepository(id);
 
   if (!event) {
-    throw createError("Evento no encontrado", 404);
+    throw createError(
+      "Evento no encontrado",
+      404
+    );
   }
 
-  return event;
+  return new EventDTO(event);
 };
 
 export const updateEventService = async (
@@ -102,11 +118,16 @@ export const updateEventService = async (
   const event = await getEventByIdRepository(id);
 
   if (!event) {
-    throw createError("Evento no encontrado", 404);
+    throw createError(
+      "Evento no encontrado",
+      404
+    );
   }
 
   const isAdmin = user.role === "admin";
-  const isOwner = event.organizer.toString() === user.id;
+
+  const isOwner =
+    event.organizer.toString() === user.id;
 
   if (!isAdmin && !isOwner) {
     throw createError(
@@ -142,11 +163,18 @@ export const updateEventService = async (
 
   for (const field of allowedFields) {
     if (updateData[field] !== undefined) {
-      safeUpdate[field] = updateData[field];
+      safeUpdate[field] =
+        updateData[field];
     }
   }
 
-  return updateEventRepository(id, safeUpdate);
+  const updatedEvent =
+    await updateEventRepository(
+      id,
+      safeUpdate
+    );
+
+  return new EventDTO(updatedEvent);
 };
 
 export const changeEventStatusService = async (
@@ -157,11 +185,16 @@ export const changeEventStatusService = async (
   const event = await getEventByIdRepository(id);
 
   if (!event) {
-    throw createError("Evento no encontrado", 404);
+    throw createError(
+      "Evento no encontrado",
+      404
+    );
   }
 
   const isAdmin = user.role === "admin";
-  const isOwner = event.organizer.toString() === user.id;
+
+  const isOwner =
+    event.organizer.toString() === user.id;
 
   if (!isAdmin && !isOwner) {
     throw createError(
@@ -178,7 +211,10 @@ export const changeEventStatusService = async (
   ];
 
   if (!validStatuses.includes(newStatus)) {
-    throw createError("Estado inválido", 400);
+    throw createError(
+      "Estado inválido",
+      400
+    );
   }
 
   if (event.status === "cancelled") {
@@ -198,12 +234,17 @@ export const changeEventStatusService = async (
     );
   }
 
-  return updateEventRepository(id, {
-    status: newStatus
-  });
+  const updatedEvent =
+    await updateEventRepository(id, {
+      status: newStatus
+    });
+
+  return new EventDTO(updatedEvent);
 };
 
-export const getEventsService = async (query) => {
+export const getEventsService = async (
+  query
+) => {
   const {
     status,
     category,
@@ -222,14 +263,20 @@ export const getEventsService = async (query) => {
     !Number.isInteger(parsedPage) ||
     parsedPage < 1
   ) {
-    throw createError("Page inválido", 400);
+    throw createError(
+      "Page inválido",
+      400
+    );
   }
 
   if (
     !Number.isInteger(parsedLimit) ||
     parsedLimit < 1
   ) {
-    throw createError("Limit inválido", 400);
+    throw createError(
+      "Limit inválido",
+      400
+    );
   }
 
   const filter = {};
@@ -252,8 +299,13 @@ export const getEventsService = async (query) => {
     if (dateFrom) {
       const from = new Date(dateFrom);
 
-      if (Number.isNaN(from.getTime())) {
-        throw createError("dateFrom inválido", 400);
+      if (
+        Number.isNaN(from.getTime())
+      ) {
+        throw createError(
+          "dateFrom inválido",
+          400
+        );
       }
 
       filter.date.$gte = from;
@@ -262,8 +314,13 @@ export const getEventsService = async (query) => {
     if (dateTo) {
       const to = new Date(dateTo);
 
-      if (Number.isNaN(to.getTime())) {
-        throw createError("dateTo inválido", 400);
+      if (
+        Number.isNaN(to.getTime())
+      ) {
+        throw createError(
+          "dateTo inválido",
+          400
+        );
       }
 
       filter.date.$lte = to;
@@ -281,27 +338,38 @@ export const getEventsService = async (query) => {
     "-createdAt"
   ];
 
-  if (!allowedSortFields.includes(sort)) {
-    throw createError("Ordenamiento inválido", 400);
+  if (
+    !allowedSortFields.includes(sort)
+  ) {
+    throw createError(
+      "Ordenamiento inválido",
+      400
+    );
   }
 
-  const skip = (parsedPage - 1) * parsedLimit;
+  const skip =
+    (parsedPage - 1) * parsedLimit;
 
-  const [events, total] = await Promise.all([
-    getEventsRepository({
-      filter,
-      sort,
-      skip,
-      limit: parsedLimit
-    }),
-    countEventsRepository(filter)
-  ]);
+  const [events, total] =
+    await Promise.all([
+      getEventsRepository({
+        filter,
+        sort,
+        skip,
+        limit: parsedLimit
+      }),
+      countEventsRepository(filter)
+    ]);
 
   return {
-    data: events,
+    data: events.map(
+      (event) => new EventDTO(event)
+    ),
     page: parsedPage,
     limit: parsedLimit,
     total,
-    totalPages: Math.ceil(total / parsedLimit)
+    totalPages: Math.ceil(
+      total / parsedLimit
+    )
   };
 };
