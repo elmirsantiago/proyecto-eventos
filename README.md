@@ -1934,3 +1934,73 @@ La API mantiene su comportamiento funcional y queda organizada mediante una arqu
 Route → Controller → Service → Repository → DAO → Database
 
 La incorporación de DTO permite controlar de forma explícita la información expuesta por la API y evitar la filtración de datos sensibles.
+---
+
+# Entrega Final - API Backend Plataforma de Eventos
+
+## Estado final del proyecto
+
+La API integra todas las funcionalidades desarrolladas durante las pre-entregas del curso utilizando una arquitectura profesional por capas.
+
+Arquitectura utilizada:
+
+Route → Controller → Service → Repository → DAO → Model / MongoDB
+
+Las respuestas de usuarios, eventos y tickets son procesadas mediante DTOs para controlar la información expuesta y evitar datos sensibles.
+
+## Flujo final verificado
+
+Antes de la entrega se verificaron los siguientes casos:
+
+1. Registro → login → `/current` → logout → `/current` responde 401.
+2. Un usuario con rol `user` intenta crear un evento → 403.
+3. Un `organizer` o `admin` puede crear eventos y un usuario puede inscribirse correctamente.
+4. Una inscripción activa duplicada → 409 Conflict.
+5. Una inscripción sin cupo disponible → 409 Conflict.
+6. Al cancelar un ticket se libera el cupo y otro usuario puede inscribirse.
+7. Un `organizer` intenta modificar un evento ajeno → 403.
+8. Un `admin` puede modificar eventos pertenecientes a otro organizer.
+9. Las respuestas de usuarios, eventos y tickets no exponen `password`.
+10. El listado de eventos soporta filtros, paginación y devuelve:
+   - `data`
+   - `page`
+   - `limit`
+   - `total`
+   - `totalPages`
+
+## Notificaciones
+
+Al confirmar una inscripción se envía un email mediante Nodemailer.
+
+Las credenciales de email se almacenan únicamente mediante variables de entorno y no forman parte del repositorio.
+
+## Seguridad
+
+- Contraseñas hasheadas con bcrypt.
+- Autenticación mediante JWT.
+- JWT almacenado en cookie `httpOnly`.
+- Passport implementa las estrategias `register`, `login` y `current`.
+- Registro público con rol `user` por defecto.
+- Middleware de autenticación responde 401.
+- Middleware de autorización responde 403.
+- Control de ownership para eventos y tickets.
+- DTOs evitan exponer información sensible.
+- `.env` y credenciales no se incluyen en el repositorio.
+
+## Resultado
+
+La API Backend de la plataforma de eventos queda completamente integrada y funcional, incluyendo:
+
+- autenticación y usuarios
+- roles y autorización
+- CRUD y gestión de eventos
+- filtros, ordenamiento y paginación
+- tickets e inscripciones
+- control y liberación de cupos
+- prevención de inscripciones duplicadas
+- cancelación de tickets
+- notificaciones por email
+- arquitectura DAO / Repository / Service / DTO
+- manejo centralizado de errores
+
+El proyecto se encuentra listo para su entrega final.

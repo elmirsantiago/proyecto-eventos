@@ -110,10 +110,11 @@ export const createTicketService = async (
     availableCapacity <
     parsedQuantity
   ) {
-    throw createError(
-      `Cupo insuficiente. Lugares disponibles: ${availableCapacity}`,
-      400
-    );
+   throw createError(
+  `Cupo insuficiente. Lugares disponibles: ${availableCapacity}`,
+  409
+);
+  
   }
 
   const ticket =
